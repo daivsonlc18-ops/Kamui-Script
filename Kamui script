@@ -1,0 +1,170 @@
+local Tool = script.Parent
+
+local UIS = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+
+local Player = Players.LocalPlayer
+
+local Debounce = 1
+local Touches = {}
+
+local IsInDimension = false
+local DimensionSession = 0
+
+-- TEMPOS
+local MinimumTimeInside = 12 -- precisa ficar 12s dentro para poder sair
+local DimensionDuration = 30 -- sai automaticamente após 30s
+local EntryCooldown = 15 -- espera 15s para entrar novamente
+
+local ExitCooldownUntil = 0
+local EntryCooldownUntil = 0
+
+
+--------------------------------------------------
+-- EQUIP / UNEQUIP
+--------------------------------------------------
+
+Tool.Equipped:Connect(function()
+	Tool.Equip.Value = true
+end)
+
+Tool.Unequipped:Connect(function()
+	Tool.Equip.Value = false
+end)
+
+
+--------------------------------------------------
+-- DETECTAR TOQUE
+--------------------------------------------------
+
+UIS.InputBegan:Connect(function(Input)
+	if Input.UserInputType == Enum.UserInputType.Touch then
+		-- Guarda se a Kamui estava equipada quando o toque começou
+		Touches[Input] = Tool.Equip.Value
+	end
+end)
+
+
+--------------------------------------------------
+-- ATIVAÇÃO
+--------------------------------------------------
+
+UIS.InputEnded:Connect(function(Input)
+
+	local IsZ = Input.KeyCode == Enum.KeyCode.Z
+	local IsTouch = Input.UserInputType == Enum.UserInputType.Touch
+
+	local ValidTouch = IsTouch and Touches[Input] == true
+
+	if IsTouch then
+		Touches[Input] = nil
+	end
+
+
+	--------------------------------------------------
+	-- ENTRAR NO KAMUI
+	--------------------------------------------------
+
+	if (IsZ or ValidTouch)
+		and Debounce == 1
+		and Tool.Equip.Value == true
+		and Tool.Active.Value == "None" then
+
+		-- Ainda está no cooldown para entrar
+		if os.clock() < EntryCooldownUntil then
+			return
+		end
+
+		Debounce = 3
+
+		IsInDimension = true
+
+		-- Nova sessão
+		DimensionSession += 1
+		local CurrentSession = DimensionSession
+
+		-- Define quando poderá sair manualmente
+		ExitCooldownUntil = os.clock() + MinimumTimeInside
+
+		-- Ativa a Kamui
+		script.RemoteEvent:FireServer("First")
+
+		task.wait(0.5)
+
+		Debounce = 2
+
+
+		--------------------------------------------------
+		-- SAÍDA AUTOMÁTICA EM 30 SEGUNDOS
+		--------------------------------------------------
+
+		task.delay(DimensionDuration, function()
+
+			-- A sessão já foi encerrada
+			if DimensionSession ~= CurrentSession then
+				return
+			end
+
+			-- Já saiu manualmente
+			if not IsInDimension then
+				return
+			end
+
+			Debounce = 3
+
+			IsInDimension = false
+
+			-- Cancela a sessão atual
+			DimensionSession += 1
+
+			-- Sai da Kamui
+			script.RemoteEvent:FireServer("Second")
+
+			task.wait(0.5)
+
+			Tool.Active.Value = "None"
+
+			-- 15 segundos até poder entrar novamente
+			EntryCooldownUntil = os.clock() + EntryCooldown
+
+			Debounce = 1
+		end)
+
+		return
+	end
+
+
+	--------------------------------------------------
+	-- SAIR MANUALMENTE
+	--------------------------------------------------
+
+	if (IsZ or ValidTouch)
+		and Debounce == 2
+		and Tool.Equip.Value == true
+		and Tool.Active.Value == "None" then
+
+		-- Ainda não passou os 12 segundos
+		if os.clock() < ExitCooldownUntil then
+			return
+		end
+
+		Debounce = 3
+
+		IsInDimension = false
+
+		-- Cancela a saída automática
+		DimensionSession += 1
+
+		-- Sai da Kamui
+		script.RemoteEvent:FireServer("Second")
+
+		task.wait(0.5)
+
+		Tool.Active.Value = "None"
+
+		-- 15 segundos até poder entrar novamente
+		EntryCooldownUntil = os.clock() + EntryCooldown
+
+		Debounce = 1
+	end
+end)
